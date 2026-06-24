@@ -19,7 +19,8 @@ def get_historical_weather(lat, lon, start_date, end_date):
         "start_date": start_date,
         "end_date": end_date,
         "daily": "temperature_2m_max,temperature_2m_min",
-        "timezone": "America/Los_Angeles"
+        "timezone": "America/Los_Angeles",
+        "temperature_unit": "fahrenheit",
     }
     response = requests.get(url, params=params)
     return response.json()
@@ -31,7 +32,8 @@ def get_forecast(lat, lon):
         "longitude": lon,
         "daily": "temperature_2m_max,temperature_2m_min",
         "timezone": "America/Los_Angeles",
-        "forecast_days": 7
+        "forecast_days": 7,
+        "temperature_unit": "fahrenheit",
     }
     response = requests.get(url, params=params)
     return response.json()
@@ -74,8 +76,8 @@ print("=" * 40)
 
 print("\n--- Historical Averages (last 5 years, your camping dates) ---")
 print(historical_df)
-print(f"\nAverage High: {historical_df['max_temp'].mean():.1f}°C")
-print(f"Average Low: {historical_df['min_temp'].mean():.1f}°C")
+print(f"\nAverage High: {historical_df['max_temp'].mean():.1f}°F")
+print(f"Average Low: {historical_df['min_temp'].mean():.1f}°F")
 
 print("\n--- 7-Day Forecast ---")
 print(forecast_df)
