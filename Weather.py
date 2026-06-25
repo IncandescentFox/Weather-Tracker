@@ -34,7 +34,6 @@ def get_historical_weather(lat, lon, start_date, end_date):
         "end_date": end_date,
         "daily": "temperature_2m_max,temperature_2m_min",
         "timezone": "America/Los_Angeles",
-        "temperature_unit": "fahrenheit",
     }
     response = requests.get(url, params=params)
     return response.json()
@@ -47,7 +46,6 @@ def get_forecast(lat, lon):
         "daily": "temperature_2m_max,temperature_2m_min",
         "timezone": "America/Los_Angeles",
         "forecast_days": 7,
-        "temperature_unit": "fahrenheit",
     }
     response = requests.get(url, params=params)
     return response.json()
@@ -102,8 +100,8 @@ print("=" * 40)
 
 print("\n--- Historical Averages (last 5 years, your camping dates) ---")
 print(historical_df)
-print(f"\nAverage High: {historical_df['max_temp'].mean():.1f}°F")
-print(f"Average Low: {historical_df['min_temp'].mean():.1f}°F")
+print(f"\nAverage High: {historical_df['max_temp'].mean():.1f}°C")
+print(f"Average Low: {historical_df['min_temp'].mean():.1f}°C")
 
 print("\n--- 7-Day Forecast ---")
 print(forecast_df)
@@ -112,3 +110,14 @@ print(forecast_df)
 historical_df.to_csv("historical_weather.csv", index=False)
 forecast_df.to_csv("forecast_weather.csv", index=False)
 print("\nData saved to CSV files.")
+
+temp_c = current_temp
+
+temp_f = round(temp_c * 9/5 + 32, 1)
+
+log_df = pd.DataFrame({
+    "date": [str(today)],
+    "time": [current_time],
+    "temperature_2m": [temp_c],
+    "temp_f": [temp_f]
+})
