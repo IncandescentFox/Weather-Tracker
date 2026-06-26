@@ -148,8 +148,5 @@ print(forecast_df)
 historical_df.to_csv("historical_weather.csv", index=False)
 forecast_df.to_csv("forecast_weather.csv", index=False)
 print("\nData saved to CSV files.")
-<<<<<<< HEAD
-=======
 
-generate_dashboard()
->>>>>>> 7449f2e (Add dashboard)
+generate_dashboard(log_df)
