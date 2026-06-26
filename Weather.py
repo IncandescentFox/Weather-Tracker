@@ -82,6 +82,7 @@ def generate_dashboard(df):
 
     fig.write_html("dashboard.html", include_plotlyjs="cdn")
     print("Dashboard saved to dashboard.html")
+    print(os.path.abspath("dashboard.html"))
 
 today = date.today()
 current_year = today.year
