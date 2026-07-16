@@ -1,33 +1,13 @@
-from pathlib import Path
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_FILE = BASE_DIR / "daily_log.csv"
-
 st.set_page_config(page_title="My City Temperature Dashboard", layout="wide")
 st.title("My City Temperature Dashboard")
 
-
-def load_weather_data():
-    if not DATA_FILE.exists():
-        st.error(f"Weather data file not found: {DATA_FILE}")
-        return pd.DataFrame(columns=["date", "time", "temperature_2m", "temp_f"])
-
-    df = pd.read_csv(DATA_FILE, skipinitialspace=True)
-    if df.empty:
-        return df
-
-    df["datetime"] = pd.to_datetime(df["time"])
-    return df.sort_values("datetime").reset_index(drop=True)
-
-
-df = load_weather_data()
-if df.empty:
-    st.info("No weather data has been logged yet.")
-    st.stop()
+df = pd.read_csv("daily_log.csv", skipinitialspace=True)
+df["datetime"] = pd.to_datetime(df["time"])
+df = df.sort_values("datetime")
 
 max_idx = df["temp_f"].idxmax()
 min_idx = df["temp_f"].idxmin()
