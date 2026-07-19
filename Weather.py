@@ -153,7 +153,7 @@ forecast_df.to_csv("forecast_weather.csv", index=False)
 print("\nData saved to CSV files.")
 
 generate_dashboard(log_df)
-________________________
+# ________________________
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
