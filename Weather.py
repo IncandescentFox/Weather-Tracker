@@ -153,3 +153,25 @@ forecast_df.to_csv("forecast_weather.csv", index=False)
 print("\nData saved to CSV files.")
 
 generate_dashboard(log_df)
+________________________
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# Create a session with retry strategy
+session = requests.Session()
+retry_strategy = Retry(
+    total=3,  # Number of retries
+    backoff_factor=1,  # Wait 1, 2, 4 seconds between retries
+    status_forcelist=[429, 500, 502, 503, 504],  # Retry on these HTTP codes
+    allowed_methods=["GET", "POST"]
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+session.mount("http://", adapter)
+session.mount("https://", adapter)
+
+# Set a timeout for requests
+timeout_seconds = 10
+
+# Use session for your API calls instead of requests.get()
+response = session.get('https://api.open-meteo.com/...', timeout=timeout_seconds)
