@@ -175,3 +175,29 @@ timeout_seconds = 10
 
 # Use session for your API calls instead of requests.get()
 response = session.get('https://api.open-meteo.com/...', timeout=timeout_seconds)
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import time
+
+def create_session_with_retries():
+    """Create a requests session with automatic retries"""
+    session = requests.Session()
+    
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS"]
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    return session
+
+# Use when making API calls
+session = create_session_with_retries()
+response = session.get('https://api.open-meteo.com/...', timeout=30)
