@@ -201,3 +201,39 @@ def create_session_with_retries():
 # Use when making API calls
 session = create_session_with_retries()
 response = session.get('https://api.open-meteo.com/...', timeout=30)
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import time
+
+def create_session_with_retries(retries=3, backoff_factor=0.5, timeout=10):
+    """Create a requests session with retry logic"""
+    session = requests.Session()
+    
+    retry_strategy = Retry(
+        total=retries,
+        status_forcelist=[429, 500, 502, 503, 504],
+        method_whitelist=["HEAD", "GET", "OPTIONS"],
+        backoff_factor=backoff_factor
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    
+    return session
+
+# Use it in your API calls:
+session = create_session_with_retries()
+try:
+    response = session.get(
+        'https://api.open-meteo.com/v1/forecast',
+        params={...},  # your parameters
+        timeout=30  # explicit timeout in seconds
+    )
+    response.raise_for_status()
+except requests.exceptions.Timeout:
+    print("Request timed out after retries")
+except requests.exceptions.RequestException as e:
+    print(f"API request failed: {e}")
