@@ -237,3 +237,36 @@ except requests.exceptions.Timeout:
     print("Request timed out after retries")
 except requests.exceptions.RequestException as e:
     print(f"API request failed: {e}")
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+def create_session_with_retries(retries=3, backoff_factor=0.5, timeout=10):
+    """Create a requests session with retry logic"""
+    session = requests.Session()
+    
+    retry_strategy = Retry(
+        total=retries,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS"],
+        backoff_factor=backoff_factor
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    return session
+
+# Use it in your Weather.py:
+session = create_session_with_retries()
+try:
+    response = session.get('https://api.open-meteo.com/v1/forecast', 
+                          params={...}, 
+                          timeout=10)
+    response.raise_for_status()
+except requests.exceptions.Timeout:
+    print("API request timed out. Please try again.")
+except requests.exceptions.RequestException as e:
+    print(f"API request failed: {e}")
