@@ -1,272 +1,144 @@
 import os
-os.environ['MPLBACKEND'] = 'Agg'
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import pandas as pd
 from datetime import date
 import plotly.graph_objects as go
 
-# My camping location
 LATITUDE = -25.6829
 LONGITUDE = -54.4546
 LOCATION_NAME = "Iguazu National Park"
-
-# Camping month and day range
 CAMP_MONTH = 8
 CAMP_START_DAY = 1
 CAMP_END_DAY = 14
 
-# get the current temperature right now   
-def get_current_weather(lat, lon):        
-    url = "https://api.open-meteo.com/v1/forecast"
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "current": "temperature_2m",
-        "timezone": "America/Los_Angeles"
-    }
-    response = requests.get(url, params=params)
-    return response.json()
+API_BASE = "https://api.open-meteo.com/v1"
+ARCHIVE_BASE = "https://archive-api.open-meteo.com/v1"
 
-def get_historical_weather(lat, lon, start_date, end_date):
-    url = "https://archive-api.open-meteo.com/v1/archive"
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "start_date": start_date,
-        "end_date": end_date,
-        "daily": "temperature_2m_max,temperature_2m_min",
-        "timezone": "America/Los_Angeles",
-    }
-    response = requests.get(url, params=params)
-    return response.json()
-
-def get_forecast(lat, lon):
-    url = "https://api.open-meteo.com/v1/forecast"
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "daily": "temperature_2m_max,temperature_2m_min",
-        "timezone": "America/Los_Angeles",
-        "forecast_days": 7,
-    }
-    response = requests.get(url, params=params)
-    return response.json()
-
-def generate_dashboard(df):
-    df = df.copy()
-    df["datetime"] = pd.to_datetime(df["time"]) 
-    max_idx = df["temp_f"].idxmax()
-    min_idx = df["temp_f"].idxmin()
-
-    fig = go.Figure()
-
-    fig.add_scatter(
-        x=df["datetime"], y=df["temp_f"],
-        mode="lines+markers", name="Temp (F)"
-    )
-    fig.add_scatter(
-        x=[df.loc[max_idx, "datetime"]], y=[df.loc[max_idx, "temp_f"]],
-        mode="markers+text",
-        marker=dict(color="red", size=14, symbol="star"),
-        text=[f"Max: {round(df.loc[max_idx, 'temp_f'], 1)}F"],
-        textposition="top right", name="Max"
-    )
-    fig.add_scatter(
-        x=[df.loc[min_idx, "datetime"]], y=[df.loc[min_idx, "temp_f"]],
-        mode="markers+text",
-        marker=dict(color="royalblue", size=14, symbol="star"),
-        text=[f"Min: {round(df.loc[min_idx, 'temp_f'], 1)}F"],
-        textposition="bottom right", name="Min"
-    )
-
-    fig.write_html("dashboard.html", include_plotlyjs="cdn")
-    print("Dashboard saved to dashboard.html")
-    
-
-today = date.today()
-current_year = today.year
-
-current_data = get_current_weather(LATITUDE, LONGITUDE)
-current_temp = current_data["current"]["temperature_2m"]
-current_time = current_data["current"]["time"]
-
-temp_c = current_temp
-temp_f = round(temp_c * 9/5 + 32, 1)
-
-log_df = pd.DataFrame({
-    "date": [str(today)],
-    "time": [current_time],
-    "temperature_2m": [temp_c],
-    "temp_f": [temp_f]
-})
-log_file = "daily_log.csv"
-log_df.to_csv(log_file, mode='a', header=not os.path.isfile(log_file), index=False)
-print(f"Logged current temperature: {temp_c} degrees C / {temp_f} degrees F at {current_time}")
-
-# Collect historical data for the last 5 years
-all_data = []
-
-for year in range(current_year - 5, current_year):
-    start = date(year, CAMP_MONTH, CAMP_START_DAY)
-    end = date(year, CAMP_MONTH, CAMP_END_DAY)
-    data = get_historical_weather(LATITUDE, LONGITUDE, start, end)
-    all_data.append(data)
-    print(f"Fetched data for {year}")
-
-dfs = []
-for year_data in all_data:
-    df = pd.DataFrame({
-        "date": year_data["daily"]["time"],
-        "max_temp": year_data["daily"]["temperature_2m_max"],
-        "min_temp": year_data["daily"]["temperature_2m_min"]
-    })
-    dfs.append(df)
-
-historical_df = pd.concat(dfs, ignore_index=True)
-
-# Get the 7-day forecast
-forecast_data = get_forecast(LATITUDE, LONGITUDE)
-forecast_df = pd.DataFrame({
-    "date": forecast_data["daily"]["time"],
-    "max_temp": forecast_data["daily"]["temperature_2m_max"],
-    "min_temp": forecast_data["daily"]["temperature_2m_min"]
-})
-
-# Results
-print(f"Weather analysis for {LOCATION_NAME}")
-print("=" * 40)
-
-print("\n--- Historical Averages (last 5 years, your camping dates) ---")
-print(historical_df)
-print(f"\nAverage High: {historical_df['max_temp'].mean():.1f}°C")
-print(f"Average Low: {historical_df['min_temp'].mean():.1f}°C")
-
-print("\n--- 7-Day Forecast ---")
-print(forecast_df)
-
-# Save to CSV
-historical_df.to_csv("historical_weather.csv", index=False)
-forecast_df.to_csv("forecast_weather.csv", index=False)
-print("\nData saved to CSV files.")
-
-generate_dashboard(log_df)
-# ________________________
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-# Create a session with retry strategy
-session = requests.Session()
-retry_strategy = Retry(
-    total=3,  # Number of retries
-    backoff_factor=1,  # Wait 1, 2, 4 seconds between retries
-    status_forcelist=[429, 500, 502, 503, 504],  # Retry on these HTTP codes
-    allowed_methods=["GET", "POST"]
-)
-adapter = HTTPAdapter(max_retries=retry_strategy)
-session.mount("http://", adapter)
-session.mount("https://", adapter)
-
-# Set a timeout for requests
-timeout_seconds = 10
-
-# Use session for your API calls instead of requests.get()
-response = session.get('https://api.open-meteo.com/...', timeout=timeout_seconds)
-
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-import time
-
-def create_session_with_retries():
-    """Create a requests session with automatic retries"""
+def create_session_with_retries(retries=3, backoff_factor=1):
     session = requests.Session()
-    
     retry_strategy = Retry(
-        total=3,
-        backoff_factor=1,
+        total=retries,
+        backoff_factor=backoff_factor,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["HEAD", "GET", "OPTIONS"]
     )
-    
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    
-    return session
-
-# Use when making API calls
-session = create_session_with_retries()
-response = session.get('https://api.open-meteo.com/...', timeout=30)
-
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-import time
-
-def create_session_with_retries(retries=3, backoff_factor=0.5, timeout=10):
-    """Create a requests session with retry logic"""
-    session = requests.Session()
-    
-    retry_strategy = Retry(
-        total=retries,
-        status_forcelist=[429, 500, 502, 503, 504],
-        method_whitelist=["HEAD", "GET", "OPTIONS"],
-        backoff_factor=backoff_factor
-    )
-    
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
-    
     return session
 
-# Use it in your API calls:
 session = create_session_with_retries()
+
+def get_current_weather(lat, lon):
+    url = f"{API_BASE}/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "current_weather": True,           # use API's current_weather flag
+        "timezone": "America/Argentina/Iguazu"
+    }
+    r = session.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+def get_historical_weather(lat, lon, start_date, end_date):
+    url = f"{ARCHIVE_BASE}/archive"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "daily": "temperature_2m_max,temperature_2m_min",
+        "timezone": "America/Argentina/Iguazu",
+    }
+    r = session.get(url, params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+def get_forecast(lat, lon, days=7):
+    url = f"{API_BASE}/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "daily": "temperature_2m_max,temperature_2m_min",
+        "timezone": "America/Argentina/Iguazu",
+        "forecast_days": days,
+    }
+    r = session.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+def generate_dashboard(df, out="dashboard.html"):
+    df = df.copy()
+    if "time" in df.columns:
+        df["datetime"] = pd.to_datetime(df["time"])
+    elif "date" in df.columns:
+        df["datetime"] = pd.to_datetime(df["date"])
+    else:
+        raise ValueError("DataFrame needs 'time' or 'date' column")
+    fig = go.Figure()
+    fig.add_scatter(x=df["datetime"], y=df["temp_f"], mode="lines+markers", name="Temp (F)")
+    fig.write_html(out, include_plotlyjs="cdn")
+    print(f"Dashboard saved to {out}")
+
+# Example usage (wrap network calls with try/except in production)
+today = date.today()
+current_year = today.year
+
 try:
-    response = session.get(
-        'https://api.open-meteo.com/v1/forecast',
-        params={...},  # your parameters
-        timeout=30  # explicit timeout in seconds
-    )
-    response.raise_for_status()
-except requests.exceptions.Timeout:
-    print("Request timed out after retries")
+    current_data = get_current_weather(LATITUDE, LONGITUDE)
+    # extract current temperature from API structure (current_weather)
+    temp_c = current_data["current_weather"]["temperature"]
+    temp_f = round(temp_c * 9/5 + 32, 1)
+    current_time = current_data["current_weather"]["time"]
+
+    log_df = pd.DataFrame({
+        "date": [str(today)],
+        "time": [current_time],
+        "temperature_2m": [temp_c],
+        "temp_f": [temp_f]
+    })
+    log_file = "daily_log.csv"
+    log_df.to_csv(log_file, mode='a', header=not os.path.isfile(log_file), index=False)
+    print(f"Logged current temperature: {temp_c} C / {temp_f} F at {current_time}")
+
+    # historical fetching (ensure start/end are date objects)
+    all_data = []
+    for year in range(current_year - 5, current_year):
+        start = date(year, CAMP_MONTH, CAMP_START_DAY)
+        end = date(year, CAMP_MONTH, CAMP_END_DAY)
+        data = get_historical_weather(LATITUDE, LONGITUDE, start, end)
+        all_data.append(data)
+        print(f"Fetched data for {year}")
+
+    # assemble DataFrame safely (validate structure)
+    dfs = []
+    for year_data in all_data:
+        daily = year_data.get("daily", {})
+        if daily and "time" in daily:
+            df = pd.DataFrame({
+                "date": daily["time"],
+                "max_temp": daily["temperature_2m_max"],
+                "min_temp": daily["temperature_2m_min"]
+            })
+            dfs.append(df)
+    historical_df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+
+    forecast_data = get_forecast(LATITUDE, LONGITUDE)
+    forecast_df = pd.DataFrame({
+        "date": forecast_data["daily"]["time"],
+        "max_temp": forecast_data["daily"]["temperature_2m_max"],
+        "min_temp": forecast_data["daily"]["temperature_2m_min"]
+    })
+
+    # Save CSVs
+    historical_df.to_csv("historical_weather.csv", index=False)
+    forecast_df.to_csv("forecast_weather.csv", index=False)
+
+    # Create dashboard from a useful dataset (e.g., historical or last N logs)
+    generate_dashboard(log_df)
+
 except requests.exceptions.RequestException as e:
-    print(f"API request failed: {e}")
-
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-def create_session_with_retries(retries=3, backoff_factor=0.5, timeout=10):
-    """Create a requests session with retry logic"""
-    session = requests.Session()
-    
-    retry_strategy = Retry(
-        total=retries,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "OPTIONS"],
-        backoff_factor=backoff_factor
-    )
-    
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    
-    return session
-
-# Use it in your Weather.py:
-session = create_session_with_retries()
-try:
-    response = session.get('https://api.open-meteo.com/v1/forecast', 
-                          params={...}, 
-                          timeout=10)
-    response.raise_for_status()
-except requests.exceptions.Timeout:
-    print("API request timed out. Please try again.")
-except requests.exceptions.RequestException as e:
-    print(f"API request failed: {e}")
+    print("API request failed:", e)
