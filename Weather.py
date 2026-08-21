@@ -142,3 +142,4 @@ try:
 
 except requests.exceptions.RequestException as e:
     print("API request failed:", e)
+    raise  # or: import sys; sys.exit(1)
