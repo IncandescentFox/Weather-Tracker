@@ -174,10 +174,10 @@ if __name__ == "__main__":
         if os.path.isfile(log_file):
             try:
                 prev = pd.read_csv(log_file, skipinitialspace=True)
-                if not prev.empty and "time" in prev.columns:
-                    last_time = prev["time"].iloc[-1]
-                    if str(last_time) == str(current_time):
-                        logger.info(f"Duplicate timestamp ({current_time}) - skipping append")
+                if not prev.empty and "date" in prev.columns:
+                    last_date = prev["date"].iloc[-1]
+                    if str(last_date) == str(today):
+                        logger.info(f"Data already logged for today ({today}) - skipping append")
                     else:
                         log_df.to_csv(log_file, mode="a", header=False, index=False)
                         logger.info(f"Appended new reading to {log_file}")
