@@ -39,7 +39,7 @@ def get_current_weather(lat, lon):
     params = {
         "latitude": lat,
         "longitude": lon,
-        "current_weather": True,
+        "current_weather": 1,  # Use 1 instead of True for API compatibility
         "timezone": "America/Argentina/Iguazu",
     }
     r = session.get(url, params=params, timeout=10)
@@ -84,6 +84,16 @@ def generate_dashboard(df, out="dashboard.html"):
         df["datetime"] = pd.to_datetime(df["date"])
     else:
         raise ValueError("DataFrame needs 'time' or 'date' column")
+    
+    # Handle missing temp_f column
+    if "temp_f" not in df.columns:
+        if "temperature_2m" in df.columns:
+            df["temp_f"] = round(df["temperature_2m"] * 9/5 + 32, 1)
+        elif "max_temp" in df.columns:
+            df["temp_f"] = round(df["max_temp"] * 9/5 + 32, 1)
+        else:
+            raise ValueError("DataFrame needs temperature column (temp_f, temperature_2m, or max_temp)")
+    
     fig = go.Figure()
     fig.add_scatter(x=df["datetime"], y=df["temp_f"], mode="lines+markers", name="Temp (F)")
     fig.write_html(out, include_plotlyjs="cdn")
@@ -137,7 +147,8 @@ if __name__ == "__main__":
 
         try:
             tail = pd.read_csv(log_file, skipinitialspace=True).tail(5)
-            print("daily_log.csv last 5 rows:\n" + tail.to_csv(index=False))
+            print("daily_log.csv last 5 rows:")
+            print(tail.to_string(index=False))
         except Exception as e:
             print("Unable to show tail of daily_log.csv:", e)
 
