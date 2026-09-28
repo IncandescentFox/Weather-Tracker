@@ -5,7 +5,11 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="My City Temperature Dashboard", layout="wide")
 st.title("My City Temperature Dashboard")
 
-df = pd.read_csv("daily_log.csv", skipinitialspace=True)
+@st.cache_data(ttl=60)
+def load_data():
+    return pd.read_csv("daily_log.csv", skipinitialspace=True)
+
+df = load_data()
 df["datetime"] = pd.to_datetime(df["time"])
 df = df.sort_values("datetime")
 
