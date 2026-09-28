@@ -48,7 +48,7 @@ def get_current_weather(lat, lon):
     params = {
         "latitude": lat,
         "longitude": lon,
-        "current": "temperature_2m,weather_code",
+        "current": "temperature_2m",
         "timezone": "America/Argentina/Iguazu",
     }
     logger.info(f"Fetching current weather from {url} with params: {params}")
@@ -98,6 +98,10 @@ def generate_dashboard(df, out="dashboard.html"):
     """
     Generate an HTML dashboard from temperature data.
     """
+    if df.empty:
+        logger.warning("DataFrame is empty, skipping dashboard generation")
+        return
+    
     df = df.copy()
     if "time" in df.columns:
         df["datetime"] = pd.to_datetime(df["time"])
@@ -135,9 +139,13 @@ if __name__ == "__main__":
         if "current" not in current_data:
             raise RuntimeError(f"Unexpected API response, missing 'current' key. Got: {current_data.keys()}")
 
-        temp_c = current_data["current"]["temperature_2m"]
+        current = current_data.get("current", {})
+        if not current or "temperature_2m" not in current:
+            raise RuntimeError(f"Invalid current data structure: {current}")
+
+        temp_c = current["temperature_2m"]
         temp_f = round(temp_c * 9/5 + 32, 1)
-        current_time = current_data["current"]["time"]
+        current_time = current.get("time", str(today))
 
         logger.info(f"Current temperature: {temp_c}°C / {temp_f}°F at {current_time}")
 
@@ -151,7 +159,7 @@ if __name__ == "__main__":
         if os.path.isfile(log_file):
             try:
                 prev = pd.read_csv(log_file, skipinitialspace=True)
-                if not prev.empty:
+                if not prev.empty and "time" in prev.columns:
                     last_time = prev["time"].iloc[-1]
                     if str(last_time) == str(current_time):
                         print(f"Duplicate timestamp detected ({current_time}) - not appending")
@@ -159,9 +167,10 @@ if __name__ == "__main__":
                         log_df.to_csv(log_file, mode="a", header=False, index=False)
                         print(f"Appended new reading to {log_file}")
                 else:
-                    log_df.to_csv(log_file, mode="a", header=not os.path.isfile(log_file), index=False)
+                    log_df.to_csv(log_file, mode="a", header=False, index=False)
                     print(f"Appended new reading to {log_file}")
             except Exception as e:
+                logger.error(f"Failed to read existing log file: {e}")
                 print("Failed to read existing log file, writing new one:", e)
                 log_df.to_csv(log_file, index=False)
                 print(f"Wrote new {log_file}")
@@ -187,41 +196,74 @@ if __name__ == "__main__":
             except requests.exceptions.RequestException as e:
                 logger.error(f"Historical fetch failed for {year}: {e}")
                 print(f"Historical fetch failed for {year}:", e)
+            except Exception as e:
+                logger.error(f"Unexpected error fetching {year}: {e}")
+                print(f"Unexpected error fetching {year}:", e)
 
         dfs = []
         for year_data in all_data:
             daily = year_data.get("daily", {})
-            if daily and "time" in daily:
-                df = pd.DataFrame({
-                    "date": daily["time"],
-                    "max_temp": daily["temperature_2m_max"],
-                    "min_temp": daily["temperature_2m_min"],
-                })
-                dfs.append(df)
+            if daily and "time" in daily and "temperature_2m_max" in daily and "temperature_2m_min" in daily:
+                try:
+                    df = pd.DataFrame({
+                        "date": daily["time"],
+                        "max_temp": daily["temperature_2m_max"],
+                        "min_temp": daily["temperature_2m_min"],
+                    })
+                    dfs.append(df)
+                except Exception as e:
+                    logger.error(f"Failed to parse daily data: {e}")
+        
         historical_df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
         try:
             forecast_data = get_forecast(LATITUDE, LONGITUDE)
-            forecast_df = pd.DataFrame({
-                "date": forecast_data["daily"]["time"],
-                "max_temp": forecast_data["daily"]["temperature_2m_max"],
-                "min_temp": forecast_data["daily"]["temperature_2m_min"],
-            })
+            daily = forecast_data.get("daily", {})
+            if daily and "time" in daily and "temperature_2m_max" in daily and "temperature_2m_min" in daily:
+                forecast_df = pd.DataFrame({
+                    "date": daily["time"],
+                    "max_temp": daily["temperature_2m_max"],
+                    "min_temp": daily["temperature_2m_min"],
+                })
+            else:
+                logger.error(f"Invalid forecast data structure: {daily}")
+                forecast_df = pd.DataFrame()
         except requests.exceptions.RequestException as e:
             logger.error(f"Forecast fetch failed: {e}")
             print("Forecast fetch failed:", e)
             forecast_df = pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Forecast processing error: {e}")
+            print("Forecast processing error:", e)
+            forecast_df = pd.DataFrame()
 
         try:
-            historical_df.to_csv("historical_weather.csv", index=False)
-            forecast_df.to_csv("forecast_weather.csv", index=False)
+            if not historical_df.empty:
+                historical_df.to_csv("historical_weather.csv", index=False)
+                print("Saved historical_weather.csv")
+            else:
+                logger.warning("Historical DataFrame is empty, skipping save")
         except Exception as e:
-            print("Failed to write historical/forecast CSVs:", e)
+            logger.error(f"Failed to write historical_weather.csv: {e}")
+            print("Failed to write historical_weather.csv:", e)
+
+        try:
+            if not forecast_df.empty:
+                forecast_df.to_csv("forecast_weather.csv", index=False)
+                print("Saved forecast_weather.csv")
+            else:
+                logger.warning("Forecast DataFrame is empty, skipping save")
+        except Exception as e:
+            logger.error(f"Failed to write forecast_weather.csv: {e}")
+            print("Failed to write forecast_weather.csv:", e)
 
         try:
             generate_dashboard(log_df)
         except Exception as e:
+            logger.error(f"Failed to generate dashboard: {e}")
             print("Failed to generate dashboard:", e)
+
+        print("Weather update completed successfully")
 
     except requests.exceptions.RequestException as e:
         logger.error(f"API request failed: {e}")
