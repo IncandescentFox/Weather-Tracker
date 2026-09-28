@@ -43,13 +43,13 @@ session = create_session_with_retries()
 def get_current_weather(lat, lon):
     """
     Fetch current weather using Open-Meteo API v1.
-    Only requests temperature_2m - weather_code is NOT supported for current endpoint.
+    Only requests temperature_2m - this is the only field supported for current endpoint.
     """
     url = f"{API_BASE}/forecast"
     params = {
         "latitude": lat,
         "longitude": lon,
-        "current": "temperature_2m",  # FIXED: Removed unsupported weather_code
+        "current": "temperature_2m",
         "timezone": "America/Argentina/Iguazu",
     }
     logger.info(f"Fetching current weather from {url} with params: {params}")
