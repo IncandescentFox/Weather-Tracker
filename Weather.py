@@ -39,7 +39,7 @@ def get_current_weather(lat, lon):
     params = {
         "latitude": lat,
         "longitude": lon,
-        "current_weather": 1,  # Use 1 instead of True for API compatibility
+        "current_weather": "true",  # API expects string "true" not integer
         "timezone": "America/Argentina/Iguazu",
     }
     r = session.get(url, params=params, timeout=10)
@@ -69,7 +69,7 @@ def get_forecast(lat, lon, days=7):
         "longitude": lon,
         "daily": "temperature_2m_max,temperature_2m_min",
         "timezone": "America/Argentina/Iguazu",
-        "forecast_days": days,
+        "forecast_days": str(days),  # Convert to string for API compatibility
     }
     r = session.get(url, params=params, timeout=10)
     r.raise_for_status()
