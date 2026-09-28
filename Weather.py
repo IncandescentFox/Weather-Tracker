@@ -1,11 +1,16 @@
 import os
 from datetime import date
+import logging
 
 import pandas as pd
 import plotly.graph_objects as go
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 LATITUDE = -25.6829
 LONGITUDE = -54.4546
@@ -35,19 +40,27 @@ session = create_session_with_retries()
 
 
 def get_current_weather(lat, lon):
+    """
+    Fetch current weather using Open-Meteo API v1.
+    Uses 'current' parameter (not 'current_weather').
+    """
     url = f"{API_BASE}/forecast"
     params = {
         "latitude": lat,
         "longitude": lon,
-        "current_weather": "true",  # API expects string "true" not integer
+        "current": "temperature_2m,weather_code",
         "timezone": "America/Argentina/Iguazu",
     }
+    logger.info(f"Fetching current weather from {url} with params: {params}")
     r = session.get(url, params=params, timeout=10)
     r.raise_for_status()
     return r.json()
 
 
 def get_historical_weather(lat, lon, start_date, end_date):
+    """
+    Fetch historical weather data from archive API.
+    """
     url = f"{ARCHIVE_BASE}/archive"
     params = {
         "latitude": lat,
@@ -57,26 +70,34 @@ def get_historical_weather(lat, lon, start_date, end_date):
         "daily": "temperature_2m_max,temperature_2m_min",
         "timezone": "America/Argentina/Iguazu",
     }
+    logger.info(f"Fetching historical weather for {start_date} to {end_date}")
     r = session.get(url, params=params, timeout=30)
     r.raise_for_status()
     return r.json()
 
 
 def get_forecast(lat, lon, days=7):
+    """
+    Fetch weather forecast using Open-Meteo API v1.
+    """
     url = f"{API_BASE}/forecast"
     params = {
         "latitude": lat,
         "longitude": lon,
         "daily": "temperature_2m_max,temperature_2m_min",
         "timezone": "America/Argentina/Iguazu",
-        "forecast_days": str(days),  # Convert to string for API compatibility
+        "forecast_days": days,
     }
+    logger.info(f"Fetching forecast for {days} days")
     r = session.get(url, params=params, timeout=10)
     r.raise_for_status()
     return r.json()
 
 
 def generate_dashboard(df, out="dashboard.html"):
+    """
+    Generate an HTML dashboard from temperature data.
+    """
     df = df.copy()
     if "time" in df.columns:
         df["datetime"] = pd.to_datetime(df["time"])
@@ -108,14 +129,17 @@ if __name__ == "__main__":
 
     try:
         current_data = get_current_weather(LATITUDE, LONGITUDE)
+        logger.info(f"Current data response keys: {current_data.keys()}")
 
-        # Validate response
-        if "current_weather" not in current_data:
-            raise RuntimeError(f"Unexpected API response, missing 'current_weather': {current_data}")
+        # Validate response - check for 'current' key (not 'current_weather')
+        if "current" not in current_data:
+            raise RuntimeError(f"Unexpected API response, missing 'current' key. Got: {current_data.keys()}")
 
-        temp_c = current_data["current_weather"]["temperature"]
+        temp_c = current_data["current"]["temperature_2m"]
         temp_f = round(temp_c * 9/5 + 32, 1)
-        current_time = current_data["current_weather"]["time"]
+        current_time = current_data["current"]["time"]
+
+        logger.info(f"Current temperature: {temp_c}°C / {temp_f}°F at {current_time}")
 
         log_df = pd.DataFrame({
             "date": [str(today)],
@@ -161,6 +185,7 @@ if __name__ == "__main__":
                 all_data.append(data)
                 print(f"Fetched data for {year}")
             except requests.exceptions.RequestException as e:
+                logger.error(f"Historical fetch failed for {year}: {e}")
                 print(f"Historical fetch failed for {year}:", e)
 
         dfs = []
@@ -183,6 +208,7 @@ if __name__ == "__main__":
                 "min_temp": forecast_data["daily"]["temperature_2m_min"],
             })
         except requests.exceptions.RequestException as e:
+            logger.error(f"Forecast fetch failed: {e}")
             print("Forecast fetch failed:", e)
             forecast_df = pd.DataFrame()
 
@@ -198,8 +224,10 @@ if __name__ == "__main__":
             print("Failed to generate dashboard:", e)
 
     except requests.exceptions.RequestException as e:
+        logger.error(f"API request failed: {e}")
         print("API request failed:", e)
         raise
     except Exception as e:
+        logger.error(f"Unhandled error in Weather.py: {e}")
         print("Unhandled error in Weather.py:", e)
         raise
