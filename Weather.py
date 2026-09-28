@@ -41,6 +41,7 @@ def get_current_weather(lat, lon):
         "latitude": lat,
         "longitude": lon,
         "current_weather": True,
+        "hourly": "temperature_2m",
         "timezone": "America/Argentina/Iguazu"
     }
     r = session.get(url, params=params, timeout=10)
