@@ -1,6 +1,7 @@
 import os
 from datetime import date
 import logging
+import sys
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -123,6 +124,7 @@ def generate_dashboard(df, out="dashboard.html"):
     fig = go.Figure()
     fig.add_scatter(x=df["datetime"], y=df["temp_f"], mode="lines+markers", name="Temp (F)")
     fig.write_html(out, include_plotlyjs="cdn")
+    logger.info(f"Dashboard saved to {out}")
     print(f"Dashboard saved to {out}")
 
 
@@ -141,6 +143,7 @@ if __name__ == "__main__":
     current_year = today.year
     log_file = "daily_log.csv"
     success = False
+    workflow_error = False
 
     try:
         # Fetch and process current weather
@@ -183,10 +186,19 @@ if __name__ == "__main__":
                     logger.info(f"Appended to {log_file}")
             except Exception as e:
                 logger.error(f"Failed to read existing log file: {e}, creating new")
-                log_df.to_csv(log_file, index=False)
+                try:
+                    log_df.to_csv(log_file, index=False)
+                    logger.info(f"Created new {log_file}")
+                except Exception as write_error:
+                    logger.error(f"Failed to write {log_file}: {write_error}")
+                    workflow_error = True
         else:
-            log_df.to_csv(log_file, index=False)
-            logger.info(f"Created {log_file}")
+            try:
+                log_df.to_csv(log_file, index=False)
+                logger.info(f"Created {log_file}")
+            except Exception as e:
+                logger.error(f"Failed to create {log_file}: {e}")
+                workflow_error = True
 
         # Display tail of log
         try:
@@ -206,7 +218,7 @@ if __name__ == "__main__":
                 all_data.append(data)
                 logger.info(f"Fetched data for {year}")
             except Exception as e:
-                logger.error(f"Historical fetch failed for {year}: {e}")
+                logger.warning(f"Historical fetch failed for {year}: {e}")
 
         # Process historical data
         dfs = []
@@ -239,9 +251,9 @@ if __name__ == "__main__":
                     "min_temp": daily_data["temperature_2m_min"],
                 })
         except Exception as e:
-            logger.error(f"Forecast fetch failed: {e}")
+            logger.warning(f"Forecast fetch failed: {e}")
 
-        # Save CSV files
+        # Save CSV files - don't fail workflow if these don't exist
         if not historical_df.empty:
             try:
                 historical_df.to_csv("historical_weather.csv", index=False)
@@ -260,7 +272,7 @@ if __name__ == "__main__":
         else:
             logger.warning("Forecast DataFrame is empty, skipping save")
 
-        # Generate dashboard
+        # Generate dashboard - failure here should not fail workflow
         try:
             generate_dashboard(log_df)
         except Exception as e:
@@ -273,12 +285,24 @@ if __name__ == "__main__":
     except requests.exceptions.HTTPError as e:
         logger.error(f"HTTP Error - API request failed: {e}")
         print(f"HTTP Error: {e}")
-        raise
+        workflow_error = True
     except requests.exceptions.RequestException as e:
         logger.error(f"Request failed: {e}")
         print(f"Request failed: {e}")
-        raise
+        workflow_error = True
+    except RuntimeError as e:
+        logger.error(f"Runtime error: {e}")
+        print(f"Runtime error: {e}")
+        workflow_error = True
     except Exception as e:
         logger.error(f"Unhandled error: {e}", exc_info=True)
         print(f"Error: {e}")
-        raise
+        workflow_error = True
+
+    # Exit with error code only if critical failure occurred
+    if workflow_error and not success:
+        logger.error("Workflow failed due to critical error")
+        sys.exit(1)
+    else:
+        logger.info("Workflow completed (may have non-critical warnings)")
+        sys.exit(0)
